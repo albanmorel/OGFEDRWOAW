@@ -52,28 +52,62 @@ enum GameFormat {
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 enum PlayerType {
-    Human,
     Goldfish,
+    Human {
+        deck: Vec<Cards>,
+        hand: Vec<Cards>,
+        board: Vec<Cards>,
+    },
 }
-
 #[derive(Hash, Eq, PartialEq, Debug)]
 struct Player {
-    player_type: PlayerType,
     hp: u32,
-    deck: Vec<Cards>,
-    hand: Vec<Cards>,
-    board: Vec<Cards>,
     turn_order: u32,
+    player_type: PlayerType
 }
 
-fn new_player(player_type: PlayerType, format: usize, turn_order: u32) -> Player {
+impl PlayerType {
+    pub fn create_deck(&self, format: u32 ) -> PlayerType {
+        match self {
+            PlayerType::Human => {
+                PlayerType::Human{
+                    deck: create_deck(format),
+                    hand: Vec::<Cards>::new(),
+                    board: Vec::<Cards>::new(),
+                }
+            },
+            _ => {
+                PlayerType::Goldfish
+            }
+        }
+    }
+
+    pub fn shuffle_player_deck(&mut self) {
+        match self {
+            PlayerType::Human => {
+                self.deck.shuffle(&mut thread_rng());
+            }
+            _ => {}
+        };
+    }
+    
+    pub fn draw_player_card(player: &mut Player) -> () {
+        match self {
+            PlayerType::Human => {
+                self.hand.push(self.deck.pop().unwrap());  /*TODO: remplacer uwrap par faire perdre la game*/
+            }
+            _ => {}
+        };
+}
+
+    
+}
+
+fn new_player(player_type: PlayerType, format: u32, turn_order: u32) -> Player {
     Player {
-        player_type: player_type.clone(),
         hp: 20,
-        deck: create_deck(format, player_type.clone()),
-        hand: Vec::<Cards>::new(),
-        board: Vec::<Cards>::new(),
         turn_order,
+        player_type :player_type.create_deck(format),
     }
 }
 /*
@@ -106,12 +140,12 @@ fn create_players_and_decks(
 ) -> Vec<Player> {
     let mut players_list = Vec::<Player>::new();
     let mut turn_order: u32 = 1;
-    for i in 1..max(number_of_human_player, number_of_goldfish_player) + 1 {
+    for i in 1..number_of_human_player + number_of_goldfish_player + 1 {
         if i <= number_of_human_player {
             players_list.push(new_player(PlayerType::Human, format, turn_order));
             turn_order += 1;
         }
-        if i <= number_of_goldfish_player {
+        else {
             players_list.push(new_player(PlayerType::Goldfish, format, turn_order));
             turn_order += 1;
         }
@@ -140,11 +174,8 @@ fn choose_format() -> GameFormat {
     choosed_format
 }
 
-fn create_deck(deck_size: usize, player_type: PlayerType) -> Vec<Cards> {
+fn create_deck(deck_size: u32) -> Vec<Cards> {
     let mut deck = Vec::<Cards>::new();
-    if player_type == PlayerType::Goldfish {
-        return deck;
-    }
     let creature = new_creature_card();
     let land = new_land_card();
 
@@ -163,35 +194,17 @@ fn create_deck(deck_size: usize, player_type: PlayerType) -> Vec<Cards> {
     }
     deck
 }
-
-fn shuffle_player_deck(player: &mut Player) -> () {
-    player.deck.shuffle(&mut thread_rng());
-}
-fn shuffle_human_players_decks(players_list: &mut Vec<Player>) -> () {
+fn shuffle_decks(players_list: &mut Vec<Player>) -> () {
     for player in players_list {
-        match player.player_type {
-            PlayerType::Human => shuffle_player_deck(player),
-            _ => {}
-        };
-    }
+        player.player_type.shuffle_player_deck();
+    };
 }
-fn draw_human_players_hands(players_list: &mut Vec<Player>) -> () {
+fn draw_hands(players_list: &mut Vec<Player>) -> () {
     for player in players_list {
-        match player.player_type {
-            PlayerType::Human => {
-                for _i in 0..7 {
-                    draw_player_card(player)
-                }
-            }
-            _ => {}
+        for _i in 0..7 {
+            draw_card(player)
         }
     }
-}
-
-fn draw_player_card(player: &mut Player) -> () {
-    player.hand.push(
-        player.deck.pop().unwrap(), /*TODO: remplacer uwrap par faire perdre la game*/
-    );
 }
 
 fn get_nb_of_human_player() -> u32 {
@@ -252,7 +265,7 @@ fn display_players_decks(players_list: &Vec<Player>) -> () {
                 .yellow()
                 .bold()
         );
-        for card in &player.deck {
+        for card in &player.player_type.deck {
             match card {
                 Cards::Land(card) => {
                     println!("{}", format!("{:?}", card).green())
@@ -265,7 +278,7 @@ fn display_players_decks(players_list: &Vec<Player>) -> () {
     }
 }
 
-fn display_player_hand(player: &Player) -> () {
+fn display_player_hand(player: &Player::PlayerType::Human) -> () {
     println!("{}", format!("\n\nMain actuelle :\n").yellow().bold());
 
     let mut i: u32 = 0;
@@ -284,7 +297,7 @@ fn display_player_hand(player: &Player) -> () {
     }
 }
 
-fn display_player_bord(player: &Player) -> () {
+fn display_player_bord(player: &Player::PlayerType::Human) -> () {
     println!("{}", format!("\n\n Board du joueur :\n").yellow().bold());
 
     for card in &player.board {
@@ -308,7 +321,7 @@ fn initialize_game_and_players() -> Vec<Player> {
     let players_list: Vec<Player> = create_players_and_decks(
         number_of_human_player,
         number_of_goldfish_player,
-        format as usize,
+        format as u32,
     );
     players_list
 }
@@ -333,12 +346,19 @@ fn play(players_list: &mut Vec<Player>) -> () {
 }
 
 fn play_player_turn(player: &mut Player) -> () {
-    play_player_main_phase(player);
-    play_player_combat_phase(player);
-    //play_player_main_phase(player);
+    match player.player_type {
+        PlayerType::Human => {
+            play_player_main_phase(player);
+            play_player_combat_phase(player);
+            //play_player_main_phase(player);
+        }
+        else {
+            play_goldfish_turn(player);
+        }
+    }
 }
 
-fn play_player_main_phase(player: &mut Player) -> () {
+fn play_player_main_phase(player: &mut Player::PlayerType::Human) -> () {
     let mut land_played: bool = false;
     loop {
         display_player_hand(player);
@@ -465,9 +485,10 @@ fn tap_a_mana_card(player: &mut Player) -> () {
 
 fn main() {
     let mut players_list: Vec<Player> = initialize_game_and_players();
+    println!("{:?}",players_list);
     //display_players_decks(&players_list);
-    shuffle_human_players_decks(&mut players_list);
-    draw_human_players_hands(&mut players_list);
+    shuffle_decks(&mut players_list);
+    draw_hands(&mut players_list);
     //display_player_hand(&players_list[0]);
     //println!("{}", &players_list[0].deck.len());
     play(&mut players_list);
