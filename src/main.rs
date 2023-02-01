@@ -63,22 +63,18 @@ enum PlayerType {
 struct Player {
     hp: u32,
     turn_order: u32,
-    player_type: PlayerType
+    player_type: PlayerType,
 }
 
 impl PlayerType {
-    pub fn create_deck(&self, format: u32 ) -> PlayerType {
+    pub fn create_deck(&self, format: u32) -> PlayerType {
         match self {
-            PlayerType::Human => {
-                PlayerType::Human{
-                    deck: create_deck(format),
-                    hand: Vec::<Cards>::new(),
-                    board: Vec::<Cards>::new(),
-                }
+            PlayerType::Human => PlayerType::Human {
+                deck: create_deck(format),
+                hand: Vec::<Cards>::new(),
+                board: Vec::<Cards>::new(),
             },
-            _ => {
-                PlayerType::Goldfish
-            }
+            _ => PlayerType::Goldfish,
         }
     }
 
@@ -90,24 +86,22 @@ impl PlayerType {
             _ => {}
         };
     }
-    
+
     pub fn draw_player_card(player: &mut Player) -> () {
         match self {
             PlayerType::Human => {
-                self.hand.push(self.deck.pop().unwrap());  /*TODO: remplacer uwrap par faire perdre la game*/
+                self.hand.push(self.deck.pop().unwrap()); /*TODO: remplacer uwrap par faire perdre la game*/
             }
             _ => {}
         };
-}
-
-    
+    }
 }
 
 fn new_player(player_type: PlayerType, format: u32, turn_order: u32) -> Player {
     Player {
         hp: 20,
         turn_order,
-        player_type :player_type.create_deck(format),
+        player_type: player_type.create_deck(format),
     }
 }
 /*
@@ -144,8 +138,7 @@ fn create_players_and_decks(
         if i <= number_of_human_player {
             players_list.push(new_player(PlayerType::Human, format, turn_order));
             turn_order += 1;
-        }
-        else {
+        } else {
             players_list.push(new_player(PlayerType::Goldfish, format, turn_order));
             turn_order += 1;
         }
@@ -197,7 +190,7 @@ fn create_deck(deck_size: u32) -> Vec<Cards> {
 fn shuffle_decks(players_list: &mut Vec<Player>) -> () {
     for player in players_list {
         player.player_type.shuffle_player_deck();
-    };
+    }
 }
 fn draw_hands(players_list: &mut Vec<Player>) -> () {
     for player in players_list {
@@ -278,11 +271,11 @@ fn display_players_decks(players_list: &Vec<Player>) -> () {
     }
 }
 
-fn display_player_hand(player: &Player::PlayerType::Human) -> () {
+fn display_player_hand(player: &Player) -> () {
     println!("{}", format!("\n\nMain actuelle :\n").yellow().bold());
 
     let mut i: u32 = 0;
-    for card in &player.hand {
+    for card in &player.player_type.hand {
         i += 1;
         match card {
             Cards::Land(card) => {
@@ -297,10 +290,10 @@ fn display_player_hand(player: &Player::PlayerType::Human) -> () {
     }
 }
 
-fn display_player_bord(player: &Player::PlayerType::Human) -> () {
+fn display_player_bord(player: &Player) -> () {
     println!("{}", format!("\n\n Board du joueur :\n").yellow().bold());
 
-    for card in &player.board {
+    for card in &player.player_type.board {
         match card {
             Cards::Land(card) => {
                 println!("{}", format!("{:?}", card).green())
@@ -352,13 +345,11 @@ fn play_player_turn(player: &mut Player) -> () {
             play_player_combat_phase(player);
             //play_player_main_phase(player);
         }
-        else {
-            play_goldfish_turn(player);
-        }
-    }
+        _ => play_goldfish_turn(player),
+    };
 }
 
-fn play_player_main_phase(player: &mut Player::PlayerType::Human) -> () {
+fn play_player_main_phase(player: &mut Player) -> () {
     let mut land_played: bool = false;
     loop {
         display_player_hand(player);
@@ -369,9 +360,13 @@ fn play_player_main_phase(player: &mut Player::PlayerType::Human) -> () {
         std::io::stdin().read_line(&mut user_input).unwrap();
 
         match user_input.trim().parse::<usize>() {
-            Ok(choosed_card_index) if choosed_card_index <= player.hand.len() => {
-                if can_player_play_card(player, choosed_card_index - 1, &mut land_played) {
-                    land_played = play_card(player, choosed_card_index - 1, &land_played);
+            Ok(choosed_card_index) if choosed_card_index <= player.player_type.hand.len() => {
+                if can_player_play_card(
+                    &player.player_type.board,
+                    &player.player_type.hand[choosed_card_index - 1],
+                    land_played,
+                ) {
+                    land_played = play_card(player, choosed_card_index - 1, land_played);
 
                     display_player_bord(player);
                     continue;
@@ -392,11 +387,11 @@ fn play_player_main_phase(player: &mut Player::PlayerType::Human) -> () {
 
 fn play_player_combat_phase(player: &mut Player) -> () {}
 
-fn can_player_play_card(player: &mut Player, card_index: usize, land_played: &bool) -> bool {
+fn can_player_play_card(player_board: &Vec<Cards>, card: &Cards, land_played: bool) -> bool {
     println!("land played : {:?}", land_played);
 
-    match &player.hand[card_index] {
-        Cards::Land(_card) if *land_played => {
+    match card {
+        Cards::Land(_card) if land_played => {
             println!("Yooo déso mais t'as déjà joué un land ce tour ci");
             return false;
         }
@@ -404,7 +399,7 @@ fn can_player_play_card(player: &mut Player, card_index: usize, land_played: &bo
             return true;
         }
         Cards::Creature(_card) => {
-            if check_for_mana(player, card_index) {
+            if check_for_mana(&player_board, &card) {
                 return true;
             } else {
                 println!("Yooo déso mais t'as pas le mana pour cast ça");
@@ -414,25 +409,43 @@ fn can_player_play_card(player: &mut Player, card_index: usize, land_played: &bo
     };
     //display_player_bord(player);
 }
-fn play_card(player: &mut Player, card_index: usize, land_played: &bool) -> bool {
-    match &player.hand[card_index] {
+fn play_card(player: &mut Player, card: &Cards, land_played: bool) -> bool {
+    match card {
         Cards::Land(card) => {
-            player.board.push(player.hand.remove(card_index));
+            player.player_type.board.push(
+                player.hand.swap_remove(
+                    player
+                        .player_type
+                        .hand
+                        .iter()
+                        .position(|card_to_remove| *card_to_remove == needle)
+                        .expect("Yooo bah jsp la carte est pas dans ta main ¯\\_(ツ)_/¯"),
+                ),
+            );
             return true;
         }
         Cards::Creature(card) => {
             println!("{}", card.mana_cost);
             for i in 0..card.mana_cost {
-                tap_a_mana_card(player);
+                tap_a_mana_card(player.player_type.board);
             }
-            player.board.push(player.hand.remove(card_index));
-            return *land_played;
+            player.player_type.board.push(
+                player.hand.swap_remove(
+                    player
+                        .player_type
+                        .hand
+                        .iter()
+                        .position(|card_to_remove| *card_to_remove == needle)
+                        .expect("Yooo bah jsp la carte est pas dans ta main ¯\\_(ツ)_/¯"),
+                ),
+            );
+            return land_played;
         }
     }
 }
 
-fn check_for_mana(player: &mut Player, card_index: usize) -> bool {
-    get_spell_cost(&player.hand[card_index]) <= get_untapped_mana(player)
+fn check_for_mana(player_board: &Vec<Cards>, card: &Cards) -> bool {
+    get_spell_cost(card) <= get_untapped_mana(player_board)
 }
 
 fn get_spell_cost(card: &Cards) -> u32 {
@@ -442,11 +455,11 @@ fn get_spell_cost(card: &Cards) -> u32 {
     }
 }
 
-fn get_untapped_mana(player: &Player) -> u32 {
+fn get_untapped_mana(player_board: &Vec<Cards>) -> u32 {
     let mut untapped_mana: u32 = 0;
-    for card in &player.board {
+    for card in player_board {
         match card {
-            Cards::Land(card) if card.tapped == false => {
+            Cards::Land(card) if !card.tapped => {
                 untapped_mana += 1;
             }
             _ => {}
@@ -456,8 +469,6 @@ fn get_untapped_mana(player: &Player) -> u32 {
 }
 
 fn tap_card(card: &mut Cards) -> () {
-    println!("pass");
-    println!("{:?}", card);
     match card {
         Cards::Land(card) => {
             println!("pass");
@@ -469,13 +480,13 @@ fn tap_card(card: &mut Cards) -> () {
     }
 }
 
-fn tap_a_mana_card(player: &mut Player) -> () {
+fn tap_a_mana_card(player_board: &mut Vec<Cards>) -> () {
     println!("je passe");
-    for card in &mut player.board {
+    for card in player_board {
         println!("woooouu");
         match card {
             Cards::Land(_card) => {
-                tap_card(card);
+                tap_card(&mut card);
                 break;
             }
             _ => {}
@@ -485,7 +496,7 @@ fn tap_a_mana_card(player: &mut Player) -> () {
 
 fn main() {
     let mut players_list: Vec<Player> = initialize_game_and_players();
-    println!("{:?}",players_list);
+    println!("{:?}", players_list);
     //display_players_decks(&players_list);
     shuffle_decks(&mut players_list);
     draw_hands(&mut players_list);
